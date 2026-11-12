@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Battle — Школа №100</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#454B54;
+color:#F1F5F9;
+}
+
+button,input,select{font:inherit}
+
+button{
+cursor:pointer;
+border:0;
+border-radius:9px;
+padding:11px 17px;
+background:#60A5FA;
+color:#172033;
+font-weight:bold;
+transition:filter .2s,transform .2s;
+}
+
+button:hover{filter:brightness(1.12)}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+input,select{
+background:#454B54;
+color:white;
+border:1px solid #626B78;
+border-radius:8px;
+padding:12px;
+width:100%;
+}
+
+/* БОТ ДЛЯ ЖАЛОБ */
+
+.report-bot{
+position:fixed;
+left:20px;
+bottom:20px;
+z-index:90;
+width:205px;
+padding:13px 15px;
+background:#343A40;
+border:1px solid #60A5FA;
+border-radius:13px;
+box-shadow:0 4px 16px #0005;
+color:#F1F5F9;
+text-decoration:none;
+display:flex;
+align-items:center;
+gap:11px;
+transition:transform .2s,background .2s;
+}
+
+.report-bot:hover{
+background:#414B57;
+transform:translateY(-3px);
+}
+
+.report-icon{
+width:39px;
+height:39px;
+flex-shrink:0;
+background:#60A5FA;
+color:#172033;
+border-radius:10px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:21px;
+}
+
+.report-text{
+display:flex;
+flex-direction:column;
+gap:4px;
+}
+
+.report-title{
+font-size:14px;
+font-weight:bold;
+}
+
+.report-subtitle{
+font-size:11px;
+color:#C1C8D1;
+}
+
+.page{
+display:none;
+min-height:100vh;
+padding:25px 15px;
+}
+
+.page.active{display:block}
+
+.container{
+width:100%;
+max-width:850px;
+margin:auto;
+}
+
+h1,h2{text-align:center}
+
+.subtitle,.info{
+color:#C1C8D1;
+text-align:center;
+}
+
+.panel{
+background:#343A40;
+border:1px solid #59616B;
+border-radius:15px;
+padding:20px;
+margin:15px 0;
+}
+
+.form-group{margin:15px 0}
+.form-group label{
+display:block;
+margin-bottom:8px;
+}
+
+.main-button{
+width:100%;
+margin-top:15px;
+padding:14px;
+}
+
+.secondary{background:#626B78;color:white}
+.danger{background:#DC626F;color:white}
+.success{background:#45AD83;color:white}
+
+.rules-button{
+width:100%;
+margin:12px 0;
+background:#626B78;
+color:white;
+}
+
+.agreement{
+display:flex;
+gap:10px;
+align-items:flex-start;
+line-height:1.4;
+margin-top:15px;
+}
+
+.agreement input{
+width:19px;
+height:19px;
+flex-shrink:0;
+}
+
+.modal{
+display:none;
+position:fixed;
+inset:0;
+z-index:100;
+background:#000b;
+padding:15px;
+align-items:center;
+justify-content:center;
+}
+
+.modal.show{display:flex}
+
+.modal-content{
+background:#343A40;
+border:1px solid #626B78;
+border-radius:15px;
+width:100%;
+max-width:650px;
+max-height:85vh;
+overflow-y:auto;
+padding:22px;
+}
+
+.rule-section{
+margin:20px 0;
+line-height:1.6;
+}
+
+.rule-section li{margin-bottom:8px}
+
+.red{color:#FF8994}
+.yellow{color:#FFD477}
+.green{color:#72D9AC}
+
+.game-layout{
+display:flex;
+flex-direction:column;
+align-items:center;
+gap:15px;
+}
+
+.toolbar{
+display:flex;
+flex-wrap:wrap;
+justify-content:center;
+gap:9px;
+margin:12px 0;
+}
+
+#colorPicker{
+width:55px;
+height:43px;
+padding:3px;
+cursor:pointer;
+}
+
+/* ОБЛАСТЬ ВОКРУГ ХОЛСТА */
+
+.canvas-viewport{
+width:min(90vw,550px);
+height:min(90vw,550px);
+max-height:65vh;
+overflow:hidden;
+background:#D1D5DB;
+border:2px solid #60A5FA;
+border-radius:8px;
+position:relative;
+touch-action:none;
+}
+
+/* ПЕРЕМЕЩАЕМЫЙ ХОЛСТ */
+
+.canvas-stage{
+position:absolute;
+left:0;
+top:0;
+transform-origin:top left;
+}
+
+#gameCanvas{
+display:block;
+width:500px;
+height:500px;
+image-rendering:pixelated;
+cursor:crosshair;
+background:#FFFFFF;
+}
+
+.cooldown{
+text-align:center;
+color:#93C5FD;
+font-weight:bold;
+min-height:24px;
+}
+
+.movement{
+display:grid;
+grid-template-columns:45px 45px 45px;
+grid-template-rows:40px 40px;
+gap:5px;
+justify-content:center;
+margin-top:10px;
+}
+
+.movement button{
+padding:5px;
+background:#626B78;
+color:white;
+}
+
+.movement .up{grid-column:2}
+.movement .left{grid-column:1;grid-row:2}
+.movement .down{grid-column:2;grid-row:2}
+.movement .right{grid-column:3;grid-row:2}
+
+.admin-user,.admin-pixel{
+background:#454B54;
+padding:12px;
+border-radius:9px;
+margin:8px 0;
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+flex-wrap:wrap;
+}
+
+.admin-user button,.admin-pixel button{
+padding:8px 12px;
+}
+
+.small{
+font-size:12px;
+color:#C1C8D1;
+}
+
+#adminCanvasInfo{
+text-align:center;
+color:#93C5FD;
+margin:10px;
+}
+
+@media(max-width:500px){
+.page{padding:15px 10px}
+.panel{padding:14px}
+
+.report-bot{
+left:10px;
+bottom:10px;
+width:auto;
+padding:10px 12px;
+}
+
+.report-icon{
+width:35px;
+height:35px;
+}
+}
+</style>
+</head>
+
+<body>
+
+<!-- КНОПКА БОТА ДЛЯ ЖАЛОБ -->
+
+<a
+class="report-bot"
+href="https://t.me/PixelBattle_Reports_bot"
+target="_blank"
+rel="noopener noreferrer"
+aria-label="Открыть Telegram-бот для жалоб"
+>
+<span class="report-icon">✉</span>
+<span class="report-text">
+<span class="report-title">Бот для жалоб</span>
+<span class="report-subtitle">Сообщить о нарушении</span>
+</span>
+</a>
+
+<!-- РЕГИСТРАЦИЯ -->
+
+<section id="registrationPage" class="page active">
+<div class="container">
+
+<h1>🎨 PIXEL BATTLE</h1>
+<p class="subtitle">Школа №100</p>
+
+<div class="panel">
+<h2>Регистрация</h2>
+
+<div class="form-group">
+<label>Твой никнейм</label>
+<input id="nickname" maxlength="20" placeholder="Например, PixelMaster">
+</div>
+
+<div class="form-group">
+<label>Твой класс</label>
+
+<div style="display:flex;gap:10px">
+
+<select id="classNumber">
+<option value="">Класс</option>
+<option value="5">5</option>
+<option value="6">6</option>
+<option value="7">7</option>
+<option value="8">8</option>
+<option value="9">9</option>
+<option value="10">10</option>
+<option value="11">11</option>
+</select>
+
+<select id="classLetter">
+<option value="">Буква</option>
+<option value="А">А</option>
+<option value="Б">Б</option>
+<option value="В">В</option>
+<option value="Г">Г</option>
+<option value="Д">Д</option>
+<option value="Е">Е</option>
+</select>
+
+</div>
+</div>
+
+<button class="rules-button" onclick="openRules()">📜 ПРОЧИТАТЬ ПРАВИЛА</button>
+
+<label class="agreement">
+<input type="checkbox" id="agreeRules">
+<span>Я ознакомился и согласен с правилами конкурса</span>
+</label>
+
+<button class="main-button" id="registerButton" onclick="register()">ВОЙТИ В БАТТЛ</button>
+
+<p class="info" id="authStatus"></p>
+</div>
+
+<p class="info">Конкурс завершится 30 декабря 2026 года.</p>
+
+</div>
+</section>
+
+<!-- ПРАВИЛА -->
+
+<div id="rulesModal" class="modal">
+<div class="modal-content">
+
+<h2>📜 ПРАВИЛА ПИКСЕЛЬ БАТТЛА</h2>
+
+<div class="rule-section">
+<h3 class="red">🚫 СТРОГО ЗАПРЕЩЕНО</h3>
+<ol>
+<li>Любые политические символы, лозунги и пропаганда. Игра вне политики.</li>
+<li>Экстремистская символика и нацизм. Свастики (в любом виде), символы ненависти.</li>
+<li>Никаких обидных надписей в адрес конкретных людей.</li>
+<li>Контент 18+. Пошлые, пугающие или непристойные изображения.</li>
+<li>Использование скриптов, ботов и читов. Играем честно, своими руками.</li>
+<li>Персональные данные. Нельзя писать реальные номера телефонов, адреса или полные имена людей без их согласия.</li>
+</ol>
+</div>
+
+<div class="rule-section">
+<h3 class="yellow">⚠️ СИСТЕМА ШТРАФОВ</h3>
+<p><b>Грубое нарушение</b> (политика, оскорбления, экстремистская символика):</p>
+<p>Штраф: <b>-5% вашей территории класса</b> при подсчёте итогов.</p>
+<p><b>Систематическое нарушение</b> (5 нарушений за игру) или вопиющий случай — <b>ДИСКВАЛИФИКАЦИЯ КЛАССА.</b></p>
+<p>Класс будет снят с участия.</p>
+<p>Управляющие событием оставляют за собой право наказать за то, что не описано в правилах, если это вредит игре и участникам.</p>
+</div>
+
+<div class="rule-section">
+<h3 class="green">✅ ЧТО МОЖНО И НУЖНО ДЕЛАТЬ</h3>
+<ul>
+<li>Рисовать своих персонажей, пиксель-арт, еду, природу.</li>
+<li>Создавать флаг или логотип своего класса.</li>
+<li>Писать добрые шутки и мемы (без нарушения правил).</li>
+<li>Объединяться и строить масштабные проекты.</li>
+</ul>
+</div>
+
+<button class="main-button" onclick="closeRules()">ПОНЯТНО</button>
+
+</div>
+</div>
+
+<!-- ИГРА -->
+
+<section id="gamePage" class="page">
+<div class="container">
+
+<h1>🎨 PIXEL BATTLE</h1>
+<p class="subtitle" id="playerInfo"></p>
+
+<div class="panel">
+<div class="game-layout">
+
+<div>
+<label>Выбери цвет:</label>
+<input type="color" id="colorPicker" value="#ff0000">
+</div>
+
+<div class="toolbar">
+<button class="secondary" onclick="changeZoom(-0.2)">−</button>
+<span id="zoomValue" style="align-self:center;min-width:55px;text-align:center">100%</span>
+<button class="secondary" onclick="changeZoom(0.2)">+</button>
+<button class="secondary" onclick="resetView()">Сбросить вид</button>
+</div>
+
+<div class="canvas-viewport" id="viewport">
+<div class="canvas-stage" id="canvasStage">
+<canvas id="gameCanvas" width="500" height="500"></canvas>
+</div>
+</div>
+
+<div class="cooldown" id="cooldownText">Загрузка...</div>
+
+<div class="info">
+ПК: зажми правую кнопку мыши и двигай холст.<br>
+Телефон: используй стрелки для перемещения.
+</div>
+
+<div class="movement">
+<button class="up" onclick="moveCanvas(0,-40)">▲</button>
+<button class="left" onclick="moveCanvas(-40,0)">◀</button>
+<button class="down" onclick="moveCanvas(0,40)">▼</button>
+<button class="right" onclick="moveCanvas(40,0)">▶</button>
+</div>
+
+<p class="info">
+Размер холста: 500 × 500 пикселей.<br>
+Размер одного пикселя: 1 × 1.
+</p>
+
+</div>
+</div>
+
+<div class="panel">
+<h3 style="text-align:center">⏳ До окончания конкурса</h3>
+<h2 id="eventTimer">Загрузка...</h2>
+<p class="info">Окончание: 30 декабря 2026 года</p>
+</div>
+
+<button class="secondary" onclick="logout()">Выйти из аккаунта</button>
+
+</div>
+</section>
+
+<!-- АДМИН-ПАНЕЛЬ -->
+
+<section id="adminPage" class="page">
+<div class="container">
+
+<h1>⚙️ АДМИН-ПАНЕЛЬ</h1>
+
+<div class="panel">
+<h2>Участники</h2>
+<div id="usersList"></div>
+</div>
+
+<div class="panel">
+<h2>Информация о пикселях</h2>
+<p class="info">Чтобы выбрать пиксель для удаления, вернись в игру и нажми на него.</p>
+<div id="adminCanvasInfo">Выбранный пиксель: нет</div>
+<button class="danger main-button" onclick="deleteSelectedPixel()">УДАЛИТЬ ВЫБРАННЫЙ ПИКСЕЛЬ</button>
+</div>
+
+<div class="panel">
+<h2>Все установленные пиксели</h2>
+<div id="pixelsList"></div>
+</div>
+
+<button class="secondary main-button" onclick="showPage('gamePage')">ВЕРНУТЬСЯ В ИГРУ</button>
+
+</div>
+</section>
+
+<script>
+
+// =====================================
+// SUPABASE
+// =====================================
+
+const SUPABASE_URL = "https://krsyhgzkvlihfcibsprf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_oyDSiktkZKkU3nzl3vfrQQ_mcX0o1MP";
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+
+// =====================================
+// ДАННЫЕ ИГРЫ
+// =====================================
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const viewport = document.getElementById("viewport");
+const stage = document.getElementById("canvasStage");
+
+let currentUser = null;
+let pixels = {};
+let users = [];
+let bans = [];
+let isAdmin = false;
+
+let zoom = 1;
+let panX = 0;
+let panY = 0;
+
+let hoveredCell = null;
+let selectedPixel = null;
+let adminMode = false;
+
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let originalPanX = 0;
+let originalPanY = 0;
+
+const CANVAS_SIZE = 500;
+const CELL_SIZE = 1;
+const GRID_SIZE = 500;
+
+const COOLDOWN = 20;
+const END_DATE = new Date(2026, 11, 30, 23, 59, 59);
+
+let realtimeChannel = null;
+
+
+function cooldownKey() {
+return currentUser ? "pb_cooldown_" + currentUser.id : "";
+}
+
+function getLastPixelTime() {
+return Number(localStorage.getItem(cooldownKey()) || 0);
+}
+
+function setLastPixelTime(value) {
+localStorage.setItem(cooldownKey(), String(value));
+}
+
+
+// =====================================
+// СТРАНИЦЫ
+// =====================================
+
+function showPage(pageId) {
+
+document.querySelectorAll(".page").forEach(p =>
+p.classList.remove("active")
+);
+
+document.getElementById(pageId).classList.add("active");
+
+if (pageId === "gamePage") {
+draw();
+updateTransform();
+}
+
+if (pageId === "adminPage") updateAdmin();
+}
+
+function openRules() {
+document.getElementById("rulesModal").classList.add("show");
+}
+
+function closeRules() {
+document.getElementById("rulesModal").classList.remove("show");
+}
+
+document.getElementById("rulesModal").addEventListener("click", e => {
+if (e.target.id === "rulesModal") closeRules();
+});
+
+
+// =====================================
+// ПРОФИЛЬ
+// =====================================
+
+async function loadProfile(userId) {
+
+const { data, error } = await db
+.from("profiles")
+.select("*")
+.eq("id", userId)
+.maybeSingle();
+
+if (error) throw error;
+
+return data;
+}
+
+
+async function register() {
+
+const nickname = document.getElementById("nickname").value.trim();
+const classNumber = document.getElementById("classNumber").value;
+const classLetter = document.getElementById("classLetter").value;
+const agree = document.getElementById("agreeRules").checked;
+
+if (!nickname || !classNumber || !classLetter) {
+alert("Заполни все поля!");
+return;
+}
+
+if (!/^[\p{L}\p{N}_ -]{2,20}$/u.test(nickname)) {
+alert("Никнейм должен содержать от 2 до 20 допустимых символов.");
+return;
+}
+
+if (!agree) {
+alert("Для участия необходимо согласиться с правилами!");
+return;
+}
+
+if (Date.now() > END_DATE.getTime()) {
+alert("Конкурс уже завершён!");
+return;
+}
+
+const button = document.getElementById("registerButton");
+button.disabled = true;
+document.getElementById("authStatus").textContent = "Подключение...";
+
+try {
+
+let { data: sessionData, error: sessionError } = await db.auth.getSession();
+
+if (sessionError) throw sessionError;
+
+let authUser = sessionData.session?.user;
+
+if (!authUser) {
+const result = await db.auth.signInAnonymously();
+if (result.error) throw result.error;
+authUser = result.data.user;
+}
+
+const className = classNumber + classLetter;
+
+const { error: metaError } = await db.auth.updateUser({
+data: {
+username: nickname,
+class_name: className
+}
+});
+
+if (metaError) throw metaError;
+
+const { error: profileError } = await db
+.from("profiles")
+.upsert({
+id: authUser.id,
+username: nickname,
+class_name: className
+}, { onConflict: "id" });
+
+if (profileError) throw profileError;
+
+currentUser = {
+id: authUser.id,
+nickname,
+className
+};
+
+await checkBan();
+if (!currentUser) return;
+
+await loadPixels();
+await checkAdmin();
+
+connectRealtime();
+enterGame();
+
+} catch (error) {
+
+console.error(error);
+alert("Ошибка регистрации: " + error.message);
+
+} finally {
+
+button.disabled = false;
+document.getElementById("authStatus").textContent = "";
+}
+}
+
+
+function enterGame() {
+
+document.getElementById("playerInfo").textContent =
+currentUser.nickname + " | Класс: " + currentUser.className;
+
+showPage("gamePage");
+draw();
+updateCooldown();
+}
+
+
+async function restoreSession() {
+
+try {
+
+const { data, error } = await db.auth.getSession();
+if (error) throw error;
+
+const authUser = data.session?.user;
+if (!authUser) return;
+
+const profile = await loadProfile(authUser.id);
+
+if (!profile) {
+showPage("registrationPage");
+return;
+}
+
+currentUser = {
+id: authUser.id,
+nickname: profile.username,
+className: profile.class_name
+};
+
+await checkBan();
+if (!currentUser) return;
+
+await loadPixels();
+await checkAdmin();
+
+connectRealtime();
+enterGame();
+
+} catch (error) {
+
+console.error(error);
+alert("Не удалось загрузить данные: " + error.message);
+}
+}
+
+
+// =====================================
+// ПРОВЕРКА БЛОКИРОВКИ
+// =====================================
+
+async function checkBan() {
+
+if (!currentUser) return;
+
+const { data, error } = await db
+.from("bans")
+.select("user_id")
+.eq("user_id", currentUser.id)
+.maybeSingle();
+
+if (error) throw error;
+
+if (data) {
+
+alert("Твой аккаунт заблокирован!");
+currentUser = null;
+
+await db.auth.signOut();
+showPage("registrationPage");
+}
+}
+
+
+// =====================================
+// АДМИНИСТРАТОР
+// =====================================
+
+async function checkAdmin() {
+
+const { data, error } = await db
+.from("admins")
+.select("user_id")
+.eq("user_id", currentUser.id)
+.maybeSingle();
+
+if (error) throw error;
+
+isAdmin = !!data;
+}
+
+
+async function openAdmin() {
+
+if (!currentUser) return;
+
+await checkAdmin();
+
+if (!isAdmin) {
+alert("У тебя нет прав администратора!");
+return;
+}
+
+adminMode = true;
+showPage("adminPage");
+}
+
+
+document.addEventListener("keydown", e => {
+
+if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "a") {
+e.preventDefault();
+openAdmin();
+}
+});
+
+
+// =====================================
+// ВЫХОД
+// =====================================
+
+async function logout() {
+
+if (realtimeChannel) {
+await db.removeChannel(realtimeChannel);
+realtimeChannel = null;
+}
+
+await db.auth.signOut();
+
+currentUser = null;
+isAdmin = false;
+adminMode = false;
+
+showPage("registrationPage");
+}
+
+
+// =====================================
+// ЗАГРУЗКА ПИКСЕЛЕЙ
+// =====================================
+
+async function loadPixels() {
+
+const { data, error } = await db
+.from("pixels")
+.select("*");
+
+if (error) throw error;
+
+pixels = {};
+
+data.forEach(pixel => {
+
+if (
+pixel.x < 0 || pixel.x >= GRID_SIZE ||
+pixel.y < 0 || pixel.y >= GRID_SIZE
+) return;
+
+pixels[pixel.x + "_" + pixel.y] = {
+color: pixel.color,
+author: pixel.author,
+className: pixel.class_name,
+userId: pixel.user_id
+};
+});
+
+draw();
+}
+
+
+// =====================================
+// REALTIME
+// =====================================
+
+function connectRealtime() {
+
+if (realtimeChannel) {
+db.removeChannel(realtimeChannel);
+}
+
+realtimeChannel = db
+.channel("pixel-battle-live")
+
+.on(
+"postgres_changes",
+{
+event: "*",
+schema: "public",
+table: "pixels"
+},
+payload => {
+
+const pixel = payload.new;
+const old = payload.old;
+
+if (payload.eventType === "DELETE") {
+
+const key = old.x + "_" + old.y;
+delete pixels[key];
+
+} else {
+
+if (
+pixel.x < 0 || pixel.x >= GRID_SIZE ||
+pixel.y < 0 || pixel.y >= GRID_SIZE
+) return;
+
+const key = pixel.x + "_" + pixel.y;
+
+pixels[key] = {
+color: pixel.color,
+author: pixel.author,
+className: pixel.class_name,
+userId: pixel.user_id
+};
+}
+
+draw();
+
+if (
+document.getElementById("adminPage")
+.classList.contains("active")
+) {
+updateAdmin();
+}
+}
+)
+
+.on(
+"postgres_changes",
+{
+event: "*",
+schema: "public",
+table: "bans",
+filter: "user_id=eq." + currentUser.id
+},
+async () => {
+await checkBan();
+}
+)
+
+.subscribe();
+}
+
+
+// =====================================
+// РИСОВАНИЕ
+// =====================================
+
+function draw() {
+
+ctx.fillStyle = "#FFFFFF";
+ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+for (const key in pixels) {
+
+const [x, y] = key.split("_").map(Number);
+
+ctx.fillStyle = pixels[key].color;
+ctx.fillRect(x, y, 1, 1);
+}
+
+if (hoveredCell) {
+
+ctx.fillStyle = "rgba(96,165,250,0.65)";
+ctx.fillRect(hoveredCell.x, hoveredCell.y, 1, 1);
+}
+}
+
+
+// =====================================
+// ПОЛОЖЕНИЕ ПИКСЕЛЯ
+// =====================================
+
+function getCellPosition(event) {
+
+const rect = canvas.getBoundingClientRect();
+
+const x = Math.floor(
+(event.clientX - rect.left) / rect.width * GRID_SIZE
+);
+
+const y = Math.floor(
+(event.clientY - rect.top) / rect.height * GRID_SIZE
+);
+
+if (
+x < 0 || y < 0 ||
+x >= GRID_SIZE || y >= GRID_SIZE
+) return null;
+
+return { x, y };
+}
+
+
+// =====================================
+// УСТАНОВКА ПИКСЕЛЯ
+// =====================================
+
+async function placePixel(position) {
+
+if (!currentUser) return;
+
+if (Date.now() > END_DATE.getTime()) {
+alert("Конкурс завершён!");
+return;
+}
+
+if (adminMode) {
+selectedPixel = position.x + "_" + position.y;
+updateAdminSelection();
+return;
+}
+
+await checkBan();
+if (!currentUser) return;
+
+const now = Date.now();
+
+const remaining = COOLDOWN -
+Math.floor((now - getLastPixelTime()) / 1000);
+
+if (remaining > 0) {
+alert("Подожди ещё " + remaining + " сек.!");
+return;
+}
+
+const color = document.getElementById("colorPicker").value;
+
+const { error } = await db
+.from("pixels")
+.upsert({
+x: position.x,
+y: position.y,
+color,
+user_id: currentUser.id,
+author: currentUser.nickname,
+class_name: currentUser.className
+}, { onConflict: "x,y" });
+
+if (error) {
+console.error(error);
+alert("Не удалось поставить пиксель: " + error.message);
+return;
+}
+
+setLastPixelTime(now);
+updateCooldown();
+}
+
+
+// =====================================
+// СОБЫТИЯ ХОЛСТА
+// =====================================
+
+canvas.addEventListener("pointermove", event => {
+
+if (isPanning) return;
+
+hoveredCell = getCellPosition(event);
+draw();
+});
+
+
+canvas.addEventListener("pointerleave", () => {
+
+if (!isPanning) {
+hoveredCell = null;
+draw();
+}
+});
+
+
+canvas.addEventListener("click", event => {
+
+if (event.button !== 0) return;
+
+const position = getCellPosition(event);
+
+if (position) placePixel(position);
+});
+
+
+// =====================================
+// ПЕРЕМЕЩЕНИЕ ХОЛСТА
+// =====================================
+
+viewport.addEventListener("contextmenu", e => e.preventDefault());
+
+
+viewport.addEventListener("pointerdown", event => {
+
+if (event.button !== 2) return;
+
+isPanning = true;
+
+panStartX = event.clientX;
+panStartY = event.clientY;
+
+originalPanX = panX;
+originalPanY = panY;
+
+viewport.setPointerCapture(event.pointerId);
+});
+
+
+viewport.addEventListener("pointermove", event => {
+
+if (!isPanning) return;
+
+panX = originalPanX + event.clientX - panStartX;
+panY = originalPanY + event.clientY - panStartY;
+
+updateTransform();
+});
+
+
+function stopPanning() {
+isPanning = false;
+}
+
+viewport.addEventListener("pointerup", stopPanning);
+viewport.addEventListener("pointercancel", stopPanning);
+
+
+// =====================================
+// МАСШТАБ
+// =====================================
+
+function changeZoom(amount) {
+
+zoom = Math.max(0.5, Math.min(4, zoom + amount));
+updateTransform();
+}
+
+
+function updateTransform() {
+
+stage.style.transform =
+"translate(" + panX + "px," + panY + "px) scale(" + zoom + ")";
+
+document.getElementById("zoomValue").textContent =
+Math.round(zoom * 100) + "%";
+}
+
+
+function resetView() {
+
+zoom = 1;
+panX = 0;
+panY = 0;
+
+updateTransform();
+}
+
+
+function moveCanvas(x, y) {
+
+panX += x;
+panY += y;
+
+updateTransform();
+}
+
+
+// =====================================
+// КУЛДАУН
+// =====================================
+
+function updateCooldown() {
+
+const text = document.getElementById("cooldownText");
+
+if (!currentUser) {
+text.textContent = "";
+return;
+}
+
+if (Date.now() > END_DATE.getTime()) {
+text.textContent = "Рисование завершено!";
+return;
+}
+
+const remaining = Math.max(
+0,
+COOLDOWN - Math.floor(
+(Date.now() - getLastPixelTime()) / 1000
+)
+);
+
+text.textContent = remaining > 0
+? "⏳ Следующий пиксель через: " + remaining + " сек."
+: "✅ Можно ставить пиксель!";
+}
+
+setInterval(updateCooldown, 250);
+
+
+// =====================================
+// ТАЙМЕР
+// =====================================
+
+function updateEventTimer() {
+
+const timer = document.getElementById("eventTimer");
+const remaining = END_DATE.getTime() - Date.now();
+
+if (remaining <= 0) {
+timer.textContent = "КОНКУРС ЗАВЕРШЁН";
+updateCooldown();
+return;
+}
+
+const days = Math.floor(remaining / 86400000);
+const hours = Math.floor((remaining % 86400000) / 3600000);
+const minutes = Math.floor((remaining % 3600000) / 60000);
+const seconds = Math.floor((remaining % 60000) / 1000);
+
+timer.textContent =
+days + " д. " +
+hours + " ч. " +
+minutes + " мин. " +
+seconds + " сек.";
+}
+
+setInterval(updateEventTimer, 1000);
+updateEventTimer();
+
+
+// =====================================
+// АДМИН-ПАНЕЛЬ
+// =====================================
+
+async function updateAdmin() {
+
+if (!isAdmin) return;
+
+const usersList = document.getElementById("usersList");
+const pixelsList = document.getElementById("pixelsList");
+
+usersList.innerHTML = "Загрузка...";
+pixelsList.innerHTML = "Загрузка...";
+
+const [profilesResult, bansResult] = await Promise.all([
+db.from("profiles").select("*").order("created_at"),
+db.from("bans").select("*")
+]);
+
+if (profilesResult.error || bansResult.error) {
+usersList.textContent = "Ошибка загрузки участников.";
+return;
+}
+
+users = profilesResult.data;
+bans = bansResult.data;
+
+usersList.innerHTML = "";
+pixelsList.innerHTML = "";
+
+users.forEach(user => {
+
+const banned = bans.some(b => b.user_id === user.id);
+const item = document.createElement("div");
+item.className = "admin-user";
+
+const info = document.createElement("span");
+
+info.textContent =
+user.username + " — " + user.class_name +
+(banned ? " (ЗАБЛОКИРОВАН)" : "");
+
+const button = document.createElement("button");
+button.className = banned ? "success" : "danger";
+button.textContent = banned ? "Разблокировать" : "Бан";
+button.onclick = () => toggleBan(user);
+
+item.append(info, button);
+usersList.appendChild(item);
+});
+
+
+for (const key in pixels) {
+
+const pixel = pixels[key];
+const item = document.createElement("div");
+item.className = "admin-pixel";
+
+const info = document.createElement("span");
+
+info.textContent =
+"Клетка " + key +
+" | Автор: " + pixel.author +
+" | Класс: " + pixel.className;
+
+const button = document.createElement("button");
+button.className = "danger";
+button.textContent = "Удалить";
+button.onclick = () => deletePixel(key);
+
+item.append(info, button);
+pixelsList.appendChild(item);
+}
+
+if (Object.keys(pixels).length === 0) {
+pixelsList.textContent = "Пока нет установленных пикселей.";
+}
+
+updateAdminSelection();
+}
+
+
+// =====================================
+// БАН И РАЗБАН
+// =====================================
+
+async function toggleBan(user) {
+
+if (!isAdmin) return;
+
+const existing = bans.find(b => b.user_id === user.id);
+
+if (existing) {
+
+const { error } = await db
+.from("bans")
+.delete()
+.eq("user_id", user.id);
+
+if (error) return alert(error.message);
+
+alert("Участник разблокирован!");
+
+} else {
+
+const { error } = await db
+.from("bans")
+.insert({
+user_id: user.id,
+nickname: user.username,
+class_name: user.class_name
+});
+
+if (error) return alert(error.message);
+
+alert("Участник заблокирован!");
+}
+
+await updateAdmin();
+}
+
+
+// =====================================
+// УДАЛЕНИЕ ПИКСЕЛЕЙ
+// =====================================
+
+async function deletePixel(key) {
+
+if (!isAdmin) return;
+
+const [x, y] = key.split("_").map(Number);
+
+const { error } = await db
+.from("pixels")
+.delete()
+.eq("x", x)
+.eq("y", y);
+
+if (error) {
+alert("Ошибка удаления: " + error.message);
+return;
+}
+
+delete pixels[key];
+draw();
+updateAdmin();
+}
+
+
+function updateAdminSelection() {
+
+const info = document.getElementById("adminCanvasInfo");
+
+if (!selectedPixel) {
+info.textContent = "Выбранный пиксель: нет";
+return;
+}
+
+const pixel = pixels[selectedPixel];
+
+info.textContent = pixel
+? "Клетка: " + selectedPixel +
+" | Автор: " + pixel.author +
+" | Класс: " + pixel.className
+: "Выбранная клетка пустая: " + selectedPixel;
+}
+
+
+async function deleteSelectedPixel() {
+
+if (!isAdmin || !selectedPixel || !pixels[selectedPixel]) {
+alert("Сначала выбери существующий пиксель!");
+return;
+}
+
+if (!confirm("Удалить выбранный пиксель?")) return;
+
+await deletePixel(selectedPixel);
+
+selectedPixel = null;
+updateAdminSelection();
+}
+
+
+// =====================================
+// ЗАПУСК
+// =====================================
+
+draw();
+updateTransform();
+restoreSession();
+
+</script>
+
+</body>
+</html>
+
