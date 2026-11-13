@@ -132,6 +132,16 @@ display:block;
 margin-bottom:8px;
 }
 
+.form-group .creds{
+    display: flex;
+    gap: 10px;
+}
+
+.creds .input-block {
+    flex: 1 1 auto;
+}
+
+
 .main-button{
 width:100%;
 margin-top:15px;
@@ -355,8 +365,16 @@ aria-label="Открыть Telegram-бот для жалоб"
 <h2>Регистрация</h2>
 
 <div class="form-group">
-<label>Твой никнейм</label>
-<input id="nickname" maxlength="20" placeholder="Например, PixelMaster">
+<div class="creds">
+    <div class="input-block">
+        <label>Твой никнейм</label>
+        <input id="nickname" maxlength="20" placeholder="Например, PixelMaster">
+    </div>
+    <div class="input-block">
+        <label>Пароль</label>
+        <input type="password" id="password" maxlength="20" placeholder="Минимум 4 символа">
+    </div>
+</div>
 </div>
 
 <div class="form-group">
