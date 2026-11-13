@@ -842,7 +842,24 @@ async function enterBattle() {
 
   } catch (error) {
     console.error(error);
-    alert("Ошибка: " + error.message);
+
+    const msg = error.message || "";
+
+    if (error.code === "P0001" && msg.includes("WRONG_PASSWORD")) {
+      alert(
+        "Неверный пароль для ника «" + nickname + "».\n\n" +
+        "Если это твой ник — проверь пароль и попробуй снова.\n" +
+        "Если ты хотел зарегистрировать новый ник — этот уже занят, выбери другой."
+      );
+    } else if (error.code === "P0001" && msg.includes("LOCKED")) {
+      alert("Слишком много неудачных попыток. Подожди 15 минут и попробуй снова.");
+    } else if (error.code === "P0001" && msg.includes("USERNAME_TAKEN")) {
+      alert("Этот ник уже занят. Попробуй войти под ним или выбери другой ник.");
+    } else if (error.code === "P0001" && msg.includes("WEAK_PASSWORD")) {
+      alert("Слишком короткий пароль.");
+    } else {
+      alert("Не удалось войти: " + msg);
+    }
   } finally {
     button.disabled = false;
     document.getElementById("authStatus").textContent = "";
