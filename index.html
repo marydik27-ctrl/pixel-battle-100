@@ -413,7 +413,7 @@ aria-label="Открыть Telegram-бот для жалоб"
 <span>Я ознакомился и согласен с правилами конкурса</span>
 </label>
 
-<button class="main-button" id="registerButton" onclick="register()">ВОЙТИ В БАТТЛ</button>
+<button class="main-button" id="enterButton" onclick="enterBattle()">ВОЙТИ В БАТТЛ</button>
 
 <p class="info" id="authStatus"></p>
 </div>
@@ -660,162 +660,247 @@ if (e.target.id === "rulesModal") closeRules();
 // ПРОФИЛЬ
 // =====================================
 
-async function loadProfile(userId) {
+// =====================================
+// ЯДРО: РЕГИСТРАЦИЯ
+// =====================================
 
-const { data, error } = await db
-.from("profiles")
-.select("*")
-.eq("id", userId)
-.maybeSingle();
+async function doRegister(nickname, password, className) {
 
-if (error) throw error;
+  // 1. Техническая анонимная сессия
+  let { data: sessionData, error: sessionError } = await db.auth.getSession();
+  if (sessionError) throw sessionError;
 
-return data;
+  let authUser = sessionData.session?.user;
+  if (!authUser) {
+    const result = await db.auth.signInAnonymously();
+    if (result.error) throw result.error;
+    authUser = result.data.user;
+  }
+
+  // 2. RPC регистрации
+  const { error: regErr } = await db.rpc("register_profile", {
+    p_username: nickname,
+    p_password: password,
+    p_class_name: className
+  });
+  if (regErr) throw regErr;
+
+  currentUser = { id: authUser.id, nickname, className };
+
+  await checkBan();
+  if (!currentUser) return;
+
+  await loadPixels();
+  await checkAdmin();
+  connectRealtime();
+  enterGame();
 }
 
+
+// =====================================
+// ЯДРО: ВХОД
+// =====================================
+
+async function doLogin(nickname, password) {
+
+  // 1. Техническая анонимная сессия
+  let { data: sessionData, error: sessionError } = await db.auth.getSession();
+  if (sessionError) throw sessionError;
+
+  let authUser = sessionData.session?.user;
+  if (!authUser) {
+    const result = await db.auth.signInAnonymously();
+    if (result.error) throw result.error;
+    authUser = result.data.user;
+  }
+
+  // 2. RPC входа
+  const { data, error } = await db.rpc("login_profile", {
+    p_username: nickname,
+    p_password: password
+  });
+  if (error) throw error;
+
+  const className = data[0].class_name;
+  currentUser = { id: authUser.id, nickname, className };
+
+  await checkBan();
+  if (!currentUser) return;
+
+  await loadPixels();
+  await checkAdmin();
+  connectRealtime();
+  enterGame();
+}
+
+
+// =====================================
+// ОБЁРТКИ (если понадобятся отдельные кнопки)
+// =====================================
 
 async function register() {
+  const nickname = document.getElementById("nickname").value.trim();
+  const password = document.getElementById("password").value;
+  const classNumber = document.getElementById("classNumber").value;
+  const classLetter = document.getElementById("classLetter").value;
+  const agree = document.getElementById("agreeRules").checked;
 
-const nickname = document.getElementById("nickname").value.trim();
-const classNumber = document.getElementById("classNumber").value;
-const classLetter = document.getElementById("classLetter").value;
-const agree = document.getElementById("agreeRules").checked;
+  if (!nickname || !password || !classNumber || !classLetter)
+    return alert("Заполни все поля!");
+  if (!/^[\p{L}\p{N}_ -]{2,20}$/u.test(nickname))
+    return alert("Недопустимый ник.");
+  if (password.length < 4)
+    return alert("Пароль минимум 4 символа.");
+  if (!agree)
+    return alert("Нужно согласиться с правилами.");
 
-if (!nickname || !classNumber || !classLetter) {
-alert("Заполни все поля!");
-return;
+  try {
+    await doRegister(nickname, password, classNumber + classLetter);
+  } catch (error) {
+    console.error(error);
+    if (error.code === "P0001" && error.message.includes("USERNAME_TAKEN"))
+      alert("Этот ник уже занят. Попробуй войти.");
+    else
+      alert("Ошибка регистрации: " + error.message);
+  }
 }
 
-if (!/^[\p{L}\p{N}_ -]{2,20}$/u.test(nickname)) {
-alert("Никнейм должен содержать от 2 до 20 допустимых символов.");
-return;
+async function login() {
+  const nickname = document.getElementById("nickname").value.trim();
+  const password = document.getElementById("password").value;
+
+  if (!nickname || !password)
+    return alert("Введи ник и пароль.");
+
+  try {
+    await doLogin(nickname, password);
+  } catch (error) {
+    console.error(error);
+    if (error.code === "P0001" && error.message.includes("USER_NOT_FOUND"))
+      alert("Пользователь не найден.");
+    else if (error.code === "P0001" && error.message.includes("WRONG_PASSWORD"))
+      alert("Неверный пароль.");
+    else if (error.code === "P0001" && error.message.includes("LOCKED"))
+      alert("Слишком много попыток. Подожди 15 минут.");
+    else
+      alert("Ошибка входа: " + error.message);
+  }
 }
 
-if (!agree) {
-alert("Для участия необходимо согласиться с правилами!");
-return;
+async function enterBattle() {
+
+  const nickname = document.getElementById("nickname").value.trim();
+  const password = document.getElementById("password").value;
+  const classNumber = document.getElementById("classNumber").value;
+  const classLetter = document.getElementById("classLetter").value;
+  const agree = document.getElementById("agreeRules").checked;
+
+  // Общая валидация
+  if (!nickname || !password) {
+    alert("Введи ник и пароль.");
+    return;
+  }
+  if (!/^[\p{L}\p{N}_ -]{2,20}$/u.test(nickname)) {
+    alert("Никнейм должен содержать от 2 до 20 допустимых символов.");
+    return;
+  }
+  if (password.length < 4) {
+    alert("Пароль должен быть не короче 4 символов.");
+    return;
+  }
+  if (Date.now() > END_DATE.getTime()) {
+    alert("Конкурс уже завершён!");
+    return;
+  }
+
+  const button = document.getElementById("enterButton");
+  button.disabled = true;
+  document.getElementById("authStatus").textContent = "Проверка...";
+
+  try {
+    // 1. Проверяем, занят ли ник (через RPC, чтобы не раскрывать profiles)
+    const { data: exists, error: existsErr } = await db.rpc("username_exists", {
+      p_username: nickname
+    });
+    if (existsErr) throw existsErr;
+
+    if (exists) {
+      // 2a. Ник есть → это вход. Пароль уже проверит login_profile.
+      await doLogin(nickname, password);
+    } else {
+      // 2b. Ника нет → это регистрация. Требуем класс и согласие.
+      if (!classNumber || !classLetter) {
+        alert("Для регистрации выбери класс и букву.");
+        return;
+      }
+      if (!agree) {
+        alert("Для регистрации нужно согласиться с правилами.");
+        return;
+      }
+      await doRegister(nickname, password, classNumber + classLetter);
+    }
+
+  } catch (error) {
+    console.error(error);
+    alert("Ошибка: " + error.message);
+  } finally {
+    button.disabled = false;
+    document.getElementById("authStatus").textContent = "";
+  }
 }
 
-if (Date.now() > END_DATE.getTime()) {
-alert("Конкурс уже завершён!");
-return;
-}
-
-const button = document.getElementById("registerButton");
-button.disabled = true;
-document.getElementById("authStatus").textContent = "Подключение...";
-
-try {
-
-let { data: sessionData, error: sessionError } = await db.auth.getSession();
-
-if (sessionError) throw sessionError;
-
-let authUser = sessionData.session?.user;
-
-if (!authUser) {
-const result = await db.auth.signInAnonymously();
-if (result.error) throw result.error;
-authUser = result.data.user;
-}
-
-const className = classNumber + classLetter;
-
-const { error: metaError } = await db.auth.updateUser({
-data: {
-username: nickname,
-class_name: className
-}
-});
-
-if (metaError) throw metaError;
-
-const { error: profileError } = await db
-.from("profiles")
-.upsert({
-id: authUser.id,
-username: nickname,
-class_name: className
-}, { onConflict: "id" });
-
-if (profileError) throw profileError;
-
-currentUser = {
-id: authUser.id,
-nickname,
-className
-};
-
-await checkBan();
-if (!currentUser) return;
-
-await loadPixels();
-await checkAdmin();
-
-connectRealtime();
-enterGame();
-
-} catch (error) {
-
-console.error(error);
-alert("Ошибка регистрации: " + error.message);
-
-} finally {
-
-button.disabled = false;
-document.getElementById("authStatus").textContent = "";
-}
-}
-
+// =====================================
+// ПОКАЗ ИГРОВОЙ СТРАНИЦЫ
+// =====================================
 
 function enterGame() {
+  document.getElementById("playerInfo").textContent =
+    currentUser.nickname + " | Класс: " + currentUser.className;
 
-document.getElementById("playerInfo").textContent =
-currentUser.nickname + " | Класс: " + currentUser.className;
-
-showPage("gamePage");
-draw();
-updateCooldown();
+  showPage("gamePage");
+  draw();
+  updateCooldown();
 }
 
 
 async function restoreSession() {
 
-try {
+  try {
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
 
-const { data, error } = await db.auth.getSession();
-if (error) throw error;
+    const authUser = data.session?.user;
+    if (!authUser) return;
 
-const authUser = data.session?.user;
-if (!authUser) return;
+    // RPC вместо прямого select — profiles закрыт RLS
+    const { data: rows, error: profErr } = await db.rpc("get_my_profile");
+    if (profErr) throw profErr;
 
-const profile = await loadProfile(authUser.id);
+    if (!rows || rows.length === 0) {
+      await db.auth.signOut();
+      showPage("registrationPage");
+      return;
+    }
 
-if (!profile) {
-showPage("registrationPage");
-return;
-}
+    currentUser = {
+      id: authUser.id,
+      nickname: rows[0].username,
+      className: rows[0].class_name
+    };
 
-currentUser = {
-id: authUser.id,
-nickname: profile.username,
-className: profile.class_name
-};
+    await checkBan();
+    if (!currentUser) return;
 
-await checkBan();
-if (!currentUser) return;
+    await loadPixels();
+    await checkAdmin();
 
-await loadPixels();
-await checkAdmin();
+    connectRealtime();
+    enterGame();
 
-connectRealtime();
-enterGame();
-
-} catch (error) {
-
-console.error(error);
-alert("Не удалось загрузить данные: " + error.message);
-}
+  } catch (error) {
+    console.error(error);
+    alert("Не удалось загрузить данные: " + error.message);
+  }
 }
 
 
@@ -1317,8 +1402,8 @@ usersList.innerHTML = "Загрузка...";
 pixelsList.innerHTML = "Загрузка...";
 
 const [profilesResult, bansResult] = await Promise.all([
-db.from("profiles").select("*").order("created_at"),
-db.from("bans").select("*")
+  db.rpc("admin_list_profiles"),
+  db.from("bans").select("*")
 ]);
 
 if (profilesResult.error || bansResult.error) {
